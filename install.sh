@@ -132,31 +132,6 @@ PYEOF
         rm -f "$TMP_CFG"
     fi
 
-    # 在端口 80 的 location /server 中拦截 config API（阻止访问 printer.cfg 等）
-    if ! grep -q "root=config" "$NGINX_CFG" 2>/dev/null; then
-        TMP_PID=$$
-        sudo cat "$NGINX_CFG" > "/tmp/nginx_cpp_$TMP_PID"
-        python3 << PYPATCH
-path = "/tmp/nginx_cpp_$TMP_PID"
-with open(path, "r") as f:
-    content = f.read()
-old = "location /server {"
-block = """location /server {
-    if (\$request_uri ~ "root=config") { return 403; }
-    if (\$request_uri ~ "path=config") { return 403; }
-    if (\$request_uri ~ "filename=config") { return 403; }
-    if (\$request_uri ~ "^/server/files/config") { return 403; }
-"""
-if old in content:
-    content = content.replace(old, block, 1)
-    with open(path, "w") as f:
-        f.write(content)
-    print(" 已拦截端口 80 的 config API")
-PYPATCH
-        sudo cp "/tmp/nginx_cpp_$TMP_PID" "$NGINX_CFG"
-        rm -f "/tmp/nginx_cpp_$TMP_PID"
-    fi
-
     # 添加 5337 端口 server 块
     if ! grep -q "listen $CONFIG_PORT" "$NGINX_CFG" 2>/dev/null; then
             # 创建 5337 server 块并追加
