@@ -16,6 +16,40 @@
     return getCurrentPort() === CONFIG_PORT;
   }
 
+  // 拦截 WebSocket：端口 80 时阻止 config 相关的 server.files 请求
+  // config 文件通过 WebSocket (server.files.get_directory) 加载，nginx 无法拦截
+  function setupWebSocketInterceptor() {
+    if (shouldShowConfig()) return;
+
+    const OriginalWebSocket = window.WebSocket;
+    window.WebSocket = function (url, protocols) {
+      const ws = new OriginalWebSocket(url, protocols);
+      const originalSend = ws.send.bind(ws);
+      ws.send = function (data) {
+        try {
+          const msg = typeof data === 'string' ? JSON.parse(data) : data;
+          const method = msg?.method || '';
+          const path = msg?.params?.path || msg?.params?.filename || '';
+          // 阻止 config 目录的 get_directory、list、metadata、read 等
+          const pathStr = String(path);
+          const filename = String(msg?.params?.filename || '');
+          const root = msg?.params?.root || '';
+          const isConfigPath =
+            pathStr === 'config' ||
+            pathStr.startsWith('config/') ||
+            filename.startsWith('config/') ||
+            root === 'config';
+          if (method.includes('server.files') && isConfigPath) {
+            return; // 不发送请求
+          }
+        } catch (_) {}
+        originalSend(data);
+      };
+      return ws;
+    };
+  }
+  setupWebSocketInterceptor(); // 立即执行，必须在 Vue 创建 WebSocket 之前
+
   function isRestrictedPath(path) {
     return RESTRICTED_PATHS.some(p => path === p || path.startsWith(p + '/'));
   }
