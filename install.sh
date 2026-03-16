@@ -16,16 +16,37 @@ echo ""
 # 检测 Mainsail/Fluidd 路径
 WEB_ROOT=""
 for path in "/home/pi/mainsail" "/home/mainsail/mainsail" "/home/pi/fluidd" "/home/fluidd/fluidd" \
-            "$HOME/mainsail" "$HOME/fluidd" "/usr/share/mainsail" "/usr/share/fluidd"; do
+            "/root/mainsail" "/root/fluidd" "$HOME/mainsail" "$HOME/fluidd" \
+            "/usr/share/mainsail" "/usr/share/fluidd" \
+            "/var/www/mainsail" "/var/www/fluidd" "/opt/mainsail" "/opt/fluidd"; do
     if [ -d "$path" ] && [ -f "$path/index.html" ]; then
         WEB_ROOT="$path"
         break
     fi
 done
 
+# 从 nginx 配置中提取 root 路径
+if [ -z "$WEB_ROOT" ]; then
+    for cfg in /etc/nginx/sites-available/mainsail /etc/nginx/sites-available/fluidd \
+               /etc/nginx/sites-enabled/mainsail /etc/nginx/sites-enabled/fluidd; do
+        if [ -f "$cfg" ]; then
+            # 提取 root 指令后的路径（去除分号）
+            found=$(grep -E "^\s*root\s+" "$cfg" 2>/dev/null | head -1 | sed -E 's/.*root[[:space:]]+([^;]+);/\1/' | tr -d ' ')
+            if [ -n "$found" ] && [ -d "$found" ] && [ -f "$found/index.html" ]; then
+                WEB_ROOT="$found"
+                break
+            fi
+        fi
+    done
+fi
+
 if [ -z "$WEB_ROOT" ]; then
     echo "错误: 未找到 Mainsail 或 Fluidd 安装目录"
-    echo "请手动指定: WEB_ROOT=/path/to/mainsail bash install.sh"
+    echo ""
+    echo "查找路径: find / -name index.html -path '*mainsail*' 2>/dev/null"
+    echo "或查看 nginx 配置: grep -r 'root' /etc/nginx/"
+    echo ""
+    echo "找到后执行: WEB_ROOT=/实际路径 bash install.sh"
     exit 1
 fi
 
